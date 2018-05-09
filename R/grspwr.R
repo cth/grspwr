@@ -150,6 +150,3 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
   sum(pvalues<alpha) / max.iter
 }
 
-
-#pwr.grs(example.grs.data,n=400, alpha = 0.05)
-
