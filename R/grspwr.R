@@ -2,22 +2,32 @@
 # The motivating idea was to check whether inclusion of (badly) imputed SNPs still improves power.
 # Christian Theil Have, 2018.
 
-# Generate permutation of genotypes that minimizes fn
-# TODO: This is a candidate for Rcpp or similar because of R's copy-on-write semantics this is heavy
-genetic.optim <- function(genotypes,fn) {
-  randomswap <- function(genotypes) {
-    i <- sample(length(genotypes),1)
-    j <- sample(which(genotypes!=genotypes[i]),1)
-    tmp <- genotypes[i]
-    genotypes[i] <- genotypes[j]
-    genotypes[j] <- tmp
-    genotypes
-  }
+#' Swap two genotypes
+#'
+#' Swaps a random pair of indices in a vector of genotypes
+#' @param genotypes A vector of genotypes
+randomSwap <- function(genotypes) {
+  # TODO: This is a candidate for Rcpp or similar because of R's copy-on-write semantics this is heavy
+  i <- sample(length(genotypes),1)
+  j <- sample(which(genotypes!=genotypes[i]),1)
+  tmp <- genotypes[i]
+  genotypes[i] <- genotypes[j]
+  genotypes[j] <- tmp
+  genotypes
+}
+
+#' Permute genotypes subject to opmization
+#'
+#' Generates a permutation of genotypes that minimizes fn.
+#'
+#' @param genotypes A vector of genotypes
+#' @param fn A function which takes a vector of genotypes as first argument and return a score.
+optimizedPermutation <- function(genotypes,fn) {
   current.score <- fn(genotypes)
   max.iter=length(genotypes)*2
   iter <- 0
   repeat {
-    permuted <- randomswap(genotypes)
+    permuted <- randomSwap(genotypes)
     permuted.score <- fn(permuted)
     if(permuted.score < current.score) {
       current.score <- permuted.score
@@ -30,30 +40,49 @@ genetic.optim <- function(genotypes,fn) {
   genotypes
 }
 
+#' Combine single alleles into genotypes
+#'
 #' pairs diploid-alleles assorted according hardy-weinberg equibrilium principles iff alleles are in random order
-alleles2genotypes <- function(alleles)
+allelesToGenotypes <- function(alleles)
   alleles[seq(1,length(alleles)-1,2)] + alleles[seq(2,length(alleles),2)]
 
-sample.genotypes.normal <- function(phenotypes, beta, n, maf) {
-  num.variant.alleles <- round(maf*2*n)
-  allele.pool <- sample(c(rep(T,num.variant.alleles), rep(F, (2*n)-num.variant.alleles)), 2*n)
-  genotypes <- alleles2genotypes(allele.pool)
-  optim.func <- function(x) abs(beta-lm(phenotypes~x)$coefficients[2])
-  genetic.optim(genotypes, optim.func)
+
+#' Generate genotypes with a given effect on phetypes
+#'
+#' Make a vector of genotypes with a certain frequency and such that the
+#' per-allele effect one the given phenotypes is as specified.
+#'
+#' @param phenotypes a vector of phenotypes (assumed to be normally distributed)
+#' @param beta desired effect size
+#' @param n sample size
+#' @param maf minor (effect) allele frequency
+sampleGenotypes <- function(phenotypes, beta, n, maf) {
+  numberOfVariantAlleles <- round(maf*2*n)
+  allelePool <- sample(c(rep(T,numberOfVariantAlleles), rep(F, (2*n)-numberOfVariantAlleles)), 2*n)
+  genotypes <- allelesToGenotypes(allelePool)
+  optimizationFunction <- function(x) abs(beta-lm(phenotypes~x)$coefficients[2])
+  optimizedPermutation(genotypes, optimizationFunction)
 }
 
 #' Scale a numeric vector to values between 0 and 2.
 #' @param unscaled The unscaled input
-scale.to.dosages <- function(unscaled) {
+scaleDosages <- function(unscaled) {
   minima <- min(unscaled)
   maxima <- max(unscaled)
   2 * (unscaled + abs(minima)) / (maxima+abs(minima) - (minima+abs(minima)))
 }
 
-#' Sample dosages from genotypes using fast binary search for r-squared
-#' It will result in  approximately correct r-squared, but have a tendency to "look" to nice..
-sample.dosages <- function(genotypes,info,epsilon=0.01) {
-  jitter.amount = 0
+#' Sample dosages from genotypes
+#'
+#' Creates random dosages from genotypes using fast binary search for r-squared.
+#' It will result in  approximately correct r-squared.
+#'
+#' @param genotypes a vector of numeric genotypes (0,1,2)
+#' @param info Desired \eqn{R^2} correlation between dosages and genotypes
+#' @param epsilon A halting parameter: When the total absolute difference
+#' between desired and obtained \eqn{R^2} reaches epsilon the dosages are returned.
+sampleDosages <- function(genotypes,info,epsilon=0.01) {
+  jitterAmount = 0
   dosages <- genotypes
   repeat {
     rsq <- summary(lm(genotypes ~ dosages))$r.squared
@@ -61,15 +90,17 @@ sample.dosages <- function(genotypes,info,epsilon=0.01) {
     if(diff < epsilon)
       break
     else if (rsq > info)
-      jitter.amount <- jitter.amount + (diff / 2)
+      jitterAmount <- jitterAmount + (diff / 2)
     else
-      jitter.amount <- jitter.amount - (diff / 2)
-    dosages <- scale.to.dosages(jitter(genotypes,amount=jitter.amount))
+      jitterAmount <- jitterAmount - (diff / 2)
+    dosages <- scaleDosages(jitter(genotypes,amount=jitterAmount))
   }
   list(genotypes = genotypes, dosages = dosages,r.squared = rsq)
 }
 
-#' pwr.grs calculates the power to detect of a GRS to detect a signal at given significance level
+#' GRS power calculation
+#'
+#' Calculates the power to detect of a GRS to detect a signal at given significance level
 #' using a GRS  weights in a certain sample size and with given imputatation quality.
 #' Note: It assumes that the weights used are accurate estimates of SNP effects.
 #'
@@ -83,8 +114,15 @@ sample.dosages <- function(genotypes,info,epsilon=0.01) {
 #' @param n The number of individuals to include in the GRS
 #' @param max.iter  The number of iterations to use for the power calculation. This affects the precision of the calculated power. Should be at least 100.
 #' @param popsize The size of the population sample from which is sampled. Should be larger than N. Affects accuracy of power estimate.
+#'
+#' @examples
+#' exampleGRS <- data.frame(SNP = c("rs1", "rs2", "rs3"),
+#'                               Weight = c(0.01, 0.01, 0.2),
+#'                               EAF = c(0.42, 0.42, 0.42),
+#'                               INFO= c(0.9, 0.9, 0.2))
+#' grspwr(exampleGRS,n=400, alpha = 0.05)
 ################################################################################################
-pwr.grs <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
+grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
   # Sample a population of individuals with normally distributed phenotypes
   phenotypes <- rnorm(popsize)
   genotypes <- list()
@@ -92,8 +130,8 @@ pwr.grs <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
 
   print("Sampling population data")
   for(snp_idx in 1:nrow(snps)) {
-    genotypes[[snp_idx]] <- sample.genotypes.normal(phenotypes,snps[snp_idx,]$Weight,popsize, snps[snp_idx,]$EAF)
-    dosages[[snp_idx]] <- sample.dosages(genotypes[[snp_idx]], snps[snp_idx,]$INFO)$dosages
+    genotypes[[snp_idx]] <- sampleGenotypes(phenotypes,snps[snp_idx,]$Weight,popsize, snps[snp_idx,]$EAF)
+    dosages[[snp_idx]] <- sampleDosages(genotypes[[snp_idx]], snps[snp_idx,]$INFO)$dosages
   }
 
   print("Sampling test pvalues")
@@ -112,10 +150,6 @@ pwr.grs <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
   sum(pvalues<alpha) / max.iter
 }
 
-example.grs.data<- data.frame(
-  SNP = c("rs1", "rs2", "rs3"),
-  Weight = c(0.01, 0.01, 0.2),
-  EAF = c(0.42, 0.42, 0.42),
-  INFO= c(0.9, 0.9, 0.2))
 
 #pwr.grs(example.grs.data,n=400, alpha = 0.05)
+
