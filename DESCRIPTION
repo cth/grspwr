@@ -1,0 +1,11 @@
+Package: grspwr
+Type: Package
+Title:  Genetic Risk Score Power Simulator 
+Version: 0.1.0
+Author: Christian Theil Have
+Maintainer: Christian Theil Have <christiantheilhae@gmail.com>
+Description: grspwr is a power calculator for Genetic Risk Scores 
+    It works for imputed SNPs by taking into account imputation quality.
+License: MIT
+Encoding: UTF-8
+LazyData: true
