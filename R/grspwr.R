@@ -148,7 +148,7 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
       grs <- grs + dosages[[snp_idx]][popsample] * w
     }
     model<-lm(sample_phenotypes~grs)
-    betas<-model$coef[2]
+    betas[i]<-model$coef[2]
     pvalues[i] <- summary(model)$coefficients[2,4]
   }
 
