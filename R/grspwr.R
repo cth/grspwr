@@ -134,8 +134,12 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
     dosages[[snp_idx]] <- sampleDosages(genotypes[[snp_idx]], snps[snp_idx,]$INFO)$dosages
   }
 
-  print("Sampling test pvalues")
-  pvalues <- sapply(1:max.iter, function(i) {
+  print("Sampling test pvalues and effects")
+
+  pvalues <- rep(NA,max.iter)
+  betas <- rep(NA,max.iter)
+
+  for(i in 1:max.iter) {
     popsample <- sample(1:popsize,n)
     sample_phenotypes <- phenotypes[popsample]
     grs <- rep(0,n)
@@ -143,10 +147,15 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
       w <- snps[snp_idx,]$Weight
       grs <- grs + dosages[[snp_idx]][popsample] * w
     }
-    summary(lm(sample_phenotypes~grs))$coefficients[2,4]
-  })
+    model<-lm(sample_phenotypes~grs)
+    betas<-model$coef[2]
+    pvalues[i] <- summary(model)$coefficients[2,4]
+  }
 
   # Power is the fraction of succesfull tests
-  sum(pvalues<alpha) / max.iter
+  list(power = sum(pvalues<alpha) / max.iter,
+       pvalues = pvalues,
+       betas = betas)
+
 }
 
