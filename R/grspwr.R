@@ -84,16 +84,18 @@ scaleDosages <- function(unscaled) {
 sampleDosages <- function(genotypes,info,epsilon=0.01) {
   jitterAmount = 0
   dosages <- genotypes
-  repeat {
-    rsq <- summary(lm(genotypes ~ dosages))$r.squared
-    diff <- abs(rsq - info)
-    if(diff < epsilon)
-      break
-    else if (rsq > info)
-      jitterAmount <- jitterAmount + (diff / 2)
-    else
-      jitterAmount <- jitterAmount - (diff / 2)
-    dosages <- scaleDosages(jitter(genotypes,amount=jitterAmount))
+  if (info < 1) {
+    repeat {
+      rsq <- summary(lm(genotypes ~ dosages))$r.squared
+      diff <- abs(rsq - info)
+      if(diff < epsilon)
+        break
+      else if (rsq > info)
+        jitterAmount <- jitterAmount + (diff / 2)
+      else
+        jitterAmount <- jitterAmount - (diff / 2)
+      dosages <- scaleDosages(jitter(genotypes,amount=jitterAmount))
+    }
   }
   list(genotypes = genotypes, dosages = dosages,r.squared = rsq)
 }
@@ -148,7 +150,7 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
       grs <- grs + dosages[[snp_idx]][popsample] * w
     }
     model<-lm(sample_phenotypes~grs)
-    betas[i]<-model$coef[2]
+    betas[i]<- unname(model$coef[2])
     pvalues[i] <- summary(model)$coefficients[2,4]
   }
 
@@ -156,6 +158,4 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
   list(power = sum(pvalues<alpha) / max.iter,
        pvalues = pvalues,
        betas = betas)
-
 }
-
