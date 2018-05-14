@@ -100,6 +100,33 @@ sampleDosages <- function(genotypes,info,epsilon=0.01) {
   list(genotypes = genotypes, dosages = dosages,r.squared = rsq)
 }
 
+#' Sample a population with dosages for each SNP related to a phenotype with effects as indicated by SNP weights.
+#' This resulting object can be used as input to the grspwr calculation.
+#'
+#' @param snps: A dataframe with the following columns:
+#' \itemize{
+#' \item SNP: Unique name of SNP
+#' \item Weight: a weight associated with the _minor_ allele of SNP. Weights should be normalized   relative to a standard normal distribution (mean 0, variance 1).
+#' \item EAF: Effect allele frequency
+#' \item Estimated R-squared correlation of imputation with actual genotype.For imputed genotypes this will be [0-1] and for directly genotyped SNPs it should be 1.
+#' }
+#' @param n The number of individuals to include in the GRS
+samplePopulationDosages <- function(snps, n) {
+  phenotypes <- rnorm(n)
+  genotypes <- list()
+  dosages <- list()
+
+  # We should do this with mclapply instead
+  for(snp_idx in 1:nrow(snps)) {
+    genotypes[[snp_idx]] <- sampleGenotypes(phenotypes,snps[snp_idx,]$Weight,n, snps[snp_idx,]$EAF)
+    dosages[[snp_idx]] <- sampleDosages(genotypes[[snp_idx]], snps[snp_idx,]$INFO)$dosages
+  }
+  dat <- list(phenotypes=phenotypes, snps=snps$SNP, genotypes=genotypes, dosages=dosages)
+  class(dat) <- "population"
+  dat
+}
+
+
 #' GRS power calculation
 #'
 #' Calculates the power to detect of a GRS to detect a signal at given significance level
@@ -125,18 +152,7 @@ sampleDosages <- function(genotypes,info,epsilon=0.01) {
 #' grspwr(exampleGRS,n=400, alpha = 0.05)
 ################################################################################################
 grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
-  # Sample a population of individuals with normally distributed phenotypes
-  phenotypes <- rnorm(popsize)
-  genotypes <- list()
-  dosages <- list()
-
-  print("Sampling population data")
-  for(snp_idx in 1:nrow(snps)) {
-    genotypes[[snp_idx]] <- sampleGenotypes(phenotypes,snps[snp_idx,]$Weight,popsize, snps[snp_idx,]$EAF)
-    dosages[[snp_idx]] <- sampleDosages(genotypes[[snp_idx]], snps[snp_idx,]$INFO)$dosages
-  }
-
-  print("Sampling test pvalues and effects")
+  attach(samplePopulationDosages(snps,popsize))
 
   pvalues <- rep(NA,max.iter)
   betas <- rep(NA,max.iter)
