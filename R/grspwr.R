@@ -96,8 +96,11 @@ sampleDosages <- function(genotypes,info,epsilon=0.01) {
         jitterAmount <- jitterAmount - (diff / 2)
       dosages <- scaleDosages(jitter(genotypes,amount=jitterAmount))
     }
+    list(genotypes = genotypes, dosages = dosages,r.squared = rsq)
+  } else {
+    list(genotypes = genotypes, dosages = genotypes,r.squared = 1)
   }
-  list(genotypes = genotypes, dosages = dosages,r.squared = rsq)
+
 }
 
 #' Sample a population with dosages for each SNP related to a phenotype with effects as indicated by SNP weights.
