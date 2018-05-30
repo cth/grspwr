@@ -46,6 +46,12 @@ optimizedPermutation <- function(genotypes,fn) {
 allelesToGenotypes <- function(alleles)
   alleles[seq(1,length(alleles)-1,2)] + alleles[seq(2,length(alleles),2)]
 
+#' Generate a genotype vector of length n with a given minor allele frequency (maf)
+sampleGenotypes <- function(n,maf) {
+  numberOfVariantAlleles <- round(maf*2*n)
+  allelePool <- sample(c(rep(T,numberOfVariantAlleles), rep(F, (2*n)-numberOfVariantAlleles)), 2*n)
+  allelesToGenotypes(allelePool)
+}
 
 #' Generate genotypes with a given effect on phetypes
 #'
@@ -56,15 +62,28 @@ allelesToGenotypes <- function(alleles)
 #' @param beta desired effect size
 #' @param n sample size
 #' @param maf minor (effect) allele frequency
-sampleGenotypes <- function(phenotypes, beta, n, maf) {
-  numberOfVariantAlleles <- round(maf*2*n)
-  allelePool <- sample(c(rep(T,numberOfVariantAlleles), rep(F, (2*n)-numberOfVariantAlleles)), 2*n)
-  genotypes <- allelesToGenotypes(allelePool)
+sampleCorrelatedGenotypes <- function(phenotypes, beta, n, maf) {
   optimizationFunction <- function(x) abs(beta-lm(phenotypes~x)$coefficients[2])
-  optimizedPermutation(genotypes, optimizationFunction)
+  optimizedPermutation(sampleGenotypes(n,maf), optimizationFunction)
+}
+
+#' Generate genotypes with a given effect on phetypes (C version)
+#'
+#' Make a vector of genotypes with a certain frequency and such that the
+#' per-allele effect one the given phenotypes is as specified.
+#'
+#' @param phenotypes a vector of phenotypes (assumed to be normally distributed)
+#' @param beta desired effect size
+#' @param n sample size
+#' @param maf minor (effect) allele frequency
+sampleCorrelatedGenotypesC <- function(phenotypes,beta,n,maf) {
+  permute_genotypes_C(beta,sampleGenotypes(n,maf),phenotypes)
 }
 
 #' Scale a numeric vector to values between 0 and 2.
+#' @param unscaled The unscaled input
+#' @param unscaled The unscaled input
+#' @param unscaled The unscaled input
 #' @param unscaled The unscaled input
 scaleDosages <- function(unscaled) {
   minima <- min(unscaled)
@@ -94,13 +113,15 @@ sampleDosages <- function(genotypes,info,epsilon=0.01) {
         jitterAmount <- jitterAmount + (diff / 2)
       else
         jitterAmount <- jitterAmount - (diff / 2)
+      # This could be done inline:
       dosages <- scaleDosages(jitter(genotypes,amount=jitterAmount))
     }
-    list(genotypes = genotypes, dosages = dosages,r.squared = rsq)
+    dosages
+    #list(genotypes = genotypes, dosages = dosages,r.squared = rsq)
   } else {
-    list(genotypes = genotypes, dosages = genotypes,r.squared = 1)
+    dosages
+    #list(genotypes = genotypes, dosages = genotypes,r.squared = 1)
   }
-
 }
 
 #' Sample a population with dosages for each SNP related to a phenotype with effects as indicated by SNP weights.
@@ -121,8 +142,8 @@ samplePopulationDosages <- function(snps, n) {
 
   # We should do this with mclapply instead
   for(snp_idx in 1:nrow(snps)) {
-    genotypes[[snp_idx]] <- sampleGenotypes(phenotypes,snps[snp_idx,]$Weight,n, snps[snp_idx,]$EAF)
-    dosages[[snp_idx]] <- sampleDosages(genotypes[[snp_idx]], snps[snp_idx,]$INFO)$dosages
+    genotypes[[snp_idx]] <- sampleCorrelatedGenotypesC(phenotypes,snps[snp_idx,]$Weight,n, snps[snp_idx,]$EAF)
+    dosages[[snp_idx]] <- sampleDosages(genotypes[[snp_idx]], snps[snp_idx,]$INFO)
   }
   dat <- list(phenotypes=phenotypes, snps=snps$SNP, genotypes=genotypes, dosages=dosages)
   class(dat) <- "population"
@@ -155,18 +176,19 @@ samplePopulationDosages <- function(snps, n) {
 #' grspwr(exampleGRS,n=400, alpha = 0.05)
 ################################################################################################
 grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
-  attach(samplePopulationDosages(snps,popsize))
+  cat("Generating population phenotype and genotypes..\n")
+  pop <- samplePopulationDosages(snps,popsize)
 
+  cat("Subsampling population calculate power..\n")
   pvalues <- rep(NA,max.iter)
   betas <- rep(NA,max.iter)
-
   for(i in 1:max.iter) {
     popsample <- sample(1:popsize,n)
-    sample_phenotypes <- phenotypes[popsample]
+    sample_phenotypes <- pop$phenotypes[popsample]
     grs <- rep(0,n)
     for(snp_idx in 1:nrow(snps)) {
       w <- snps[snp_idx,]$Weight
-      grs <- grs + dosages[[snp_idx]][popsample] * w
+      grs <- grs + pop$dosages[[snp_idx]][popsample] * w
     }
     model<-lm(sample_phenotypes~grs)
     betas[i]<- unname(model$coef[2])
@@ -174,7 +196,9 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
   }
 
   # Power is the fraction of succesfull tests
-  list(power = sum(pvalues<alpha) / max.iter,
+  pwr <- list(power = sum(pvalues<alpha) / max.iter,
        pvalues = pvalues,
        betas = betas)
+  class(pwr) <- "grspwr"
+  pwr
 }
