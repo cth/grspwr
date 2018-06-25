@@ -135,8 +135,7 @@ sampleDosages <- function(genotypes,info,epsilon=0.01) {
 #' \item Estimated R-squared correlation of imputation with actual genotype.For imputed genotypes this will be [0-1] and for directly genotyped SNPs it should be 1.
 #' }
 #' @param n The number of individuals to include in the GRS
-samplePopulationDosages <- function(snps, n) {
-  phenotypes <- rnorm(n)
+samplePopulationDosages <- function(snps, n, phenotypes = rnorm(n)) {
   genotypes <- list()
   dosages <- list()
 
@@ -160,7 +159,7 @@ samplePopulationDosages <- function(snps, n) {
 #' @param snps: A dataframe with the following columns:
 #' \itemize{
 #' \item SNP: Unique name of SNP
-#' \item Weight: a weight associated with the _minor_ allele of SNP. Weights should be normalized   relative to a standard normal distribution (mean 0, variance 1).
+#' \item WEIGHT: a weight associated with the _minor_ allele of SNP. Weights should be normalized   relative to a standard normal distribution (mean 0, variance 1).
 #' \item EAF: Effect allele frequency
 #' \item Estimated R-squared correlation of imputation with actual genotype.For imputed genotypes this will be [0-1] and for directly genotyped SNPs it should be 1.
 #' }
@@ -170,35 +169,157 @@ samplePopulationDosages <- function(snps, n) {
 #'
 #' @examples
 #' exampleGRS <- data.frame(SNP = c("rs1", "rs2", "rs3"),
-#'                               Weight = c(0.01, 0.01, 0.2),
+#'                               WEIGHT = c(0.01, 0.01, 0.2),
 #'                               EAF = c(0.42, 0.42, 0.42),
 #'                               INFO= c(0.9, 0.9, 0.2))
 #' grspwr(exampleGRS,n=400, alpha = 0.05)
 ################################################################################################
-grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=n*2) {
+grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=max(n)^2) {
+  print(n)
   cat("Generating population phenotype and genotypes..\n")
   pop <- samplePopulationDosages(snps,popsize)
 
   cat("Subsampling population calculate power..\n")
-  pvalues <- rep(NA,max.iter)
-  betas <- rep(NA,max.iter)
-  for(i in 1:max.iter) {
-    popsample <- sample(1:popsize,n)
-    sample_phenotypes <- pop$phenotypes[popsample]
-    grs <- rep(0,n)
-    for(snp_idx in 1:nrow(snps)) {
-      w <- snps[snp_idx,]$Weight
-      grs <- grs + pop$dosages[[snp_idx]][popsample] * w
+
+  lapply(n,function(n_i) {
+    pvalues <- rep(NA,max.iter)
+    betas <- rep(NA,max.iter)
+    for(i in 1:max.iter) {
+      popsample <- sample(1:popsize,n_i)
+      sample_phenotypes <- pop$phenotypes[popsample]
+      grs <- rep(0,n_i)
+      for(snp_idx in 1:nrow(snps)) {
+        w <- snps[snp_idx,]$Weight
+        grs <- grs + pop$dosages[[snp_idx]][popsample] * w
+      }
+      model<-lm(sample_phenotypes~grs)
+      betas[i]<- unname(model$coef[2])
+      pvalues[i] <- summary(model)$coefficients[2,4]
     }
-    model<-lm(sample_phenotypes~grs)
-    betas[i]<- unname(model$coef[2])
-    pvalues[i] <- summary(model)$coefficients[2,4]
+
+    # Power is the fraction of succesfull tests
+    pwr <- list(
+         n = n_i,
+         power = sum(pvalues<alpha) / max.iter,
+         pvalues = pvalues,
+         betas = betas)
+    class(pwr) <- "grspwr"
+    pwr
+  })
+}
+
+#' Generates simulated pvalues for ranges of the exponent e in the equation:
+#'   $w_i = w * (R^2)^e$ for all i
+#' where $w_i$ is used as weights in such that the average p-value is minimized when testing the GRS
+#' on simulated data.
+#'
+#' @param snps: A dataframe with the following columns:
+#' \itemize{
+#' \item SNP: Unique name of SNP
+#' \item WEIGHT: a weight associated with the _minor_ allele of SNP. Weights should be normalized   relative to a standard normal distribution (mean 0, variance 1).
+#' \item EAF: Effect allele frequency
+#' \item Estimated R-squared correlation of imputation with actual genotype.For imputed genotypes this will be [0-1] and for directly genotyped SNPs it should be 1.
+#' }
+#' @param n The number of individuals to include in the GRS
+#' @param popsize The size of the population sample from which is sampled. Should be larger than N. Affects accuracy of power estimate.
+#' @param exponents A vector of exponent values to be tried. By default 20 different exponents in the range 0.01-2.0 are tried.
+#' If the range does not include the optimal exponent, then it can be extended. Similarly, it can be narrowed
+#' to achieve a finer resolution.
+testAdjustmentExponents <- function(snps, n, popsize=n^2, exponents=10*1:20/100) {
+  cat("Generating population phenotype and genotypes..\n")
+  pop <- samplePopulationDosages(snps,popsize)
+
+  betas <- list()
+  pvalues <- list()
+
+  cat("Generating powers..\n")
+  for(exp_idx in 1:length(exponents)) {
+    exponent <- exponents[exp_idx]
+    cat(paste("exponent: ", exponent, "\n"))
+    betas[[exp_idx]] <- c()
+    pvalues[[exp_idx]] <- c()
+    for(i in 1:1000) {
+      popsample <- sample(1:popsize,n)
+      sample_phenotypes <- pop$phenotypes[popsample]
+      grs <- rep(0,n)
+      for(snp_idx in 1:nrow(snps)) {
+        w <- snps[snp_idx,]$Weight * snps[snp_idx,]$INFO^exponent
+        grs <- grs + pop$dosages[[snp_idx]][popsample] * w
+      }
+      model<-lm(sample_phenotypes~grs)
+      if(i==1) {
+        betas[[exp_idx]] <- unname(model$coef[2])
+        pvalues[[exp_idx]] <- summary(model)$coefficients[2,4]
+      } else {
+        betas[[exp_idx]] <- c(betas[[exp_idx]], unname(model$coef[2]))
+        pvalues[[exp_idx]] <- c(pvalues[[exp_idx]], summary(model)$coefficients[2,4])
+      }
+   }
   }
 
-  # Power is the fraction of succesfull tests
-  pwr <- list(power = sum(pvalues<alpha) / max.iter,
-       pvalues = pvalues,
-       betas = betas)
-  class(pwr) <- "grspwr"
-  pwr
+  pvalues_all_points <- unlist(pvalues)
+  exponents_all_points <- as.vector(matrix(rep(exponents,1000),nrow=1000,byrow=T))
+
+  data.frame(exponents = exponents_all_points, pvalues = pvalues_all_points)
+}
+
+adjustWeights <- function(snps, adj.exp=0) {
+  snps$Weight <- snps$Weight * snps$INFO^adj.exp
+  snps
+}
+
+plot.AdjustWeights <- function(adjw) {
+  spline=smooth.spline(x = adjw$exponents, y = unlist(adjw$pvalues))
+  plot(spline, xlab="exponent c", ylab="mean p-value", main="Imputation adjustment", type="l")
+}
+
+
+#' autoAdjustWeights finds an optimal adjustment the weights to
+#' compensate for markers with suboptimal imputation quality.
+#' The adjustment is the exponent `e` in the model:
+#'   $w_i = w * (R^2)^e$ for all i
+#' The model is used to adjust each of the i weights. Note that
+#' weight adjustment occurs when the $R^2$ is less than 1.
+#' @param snps: A dataframe with the following columns:
+#' \itemize{
+#' \item SNP: Unique name of SNP
+#' \item WEIGHT: a weight associated with the _minor_ allele of SNP. Weights should be normalized   relative to a standard normal distribution (mean 0, variance 1).
+#' \item EAF: Effect allele frequency
+#' \item Estimated R-squared correlation of imputation with actual genotype.For imputed genotypes this will be [0-1] and for directly genotyped SNPs it should be 1.
+#' }'
+#' @param n The number of individuals to include in the GRS
+#' @param popsize The size of the population sample from which is sampled. Should be larger than N. Affects accuracy of power estimate.
+#' The function returns a new data frame identicals to snps except that the weights $w_i$ will be
+#' replaced with the updated weights
+autoAdjustWeights <- function(snps, n, popsize=n^2) {
+  max_exponent <- 1.0
+  # TODO: We could test whether p-vlaue means are significantly non-random
+  e_vs_p <- data.frame(exponents=c(),pvalues=c())
+  stepsize <- 0.05
+  minima <- NA
+  repeat {
+    exponents=seq(stepsize,max_exponent,stepsize)
+    print(exponents)
+    e_vs_p <- rbind(e_vs_p, testAdjustmentExponents(snps, n, popsize, exponents))
+    # Try fit a spline and find minima
+    spline <- smooth.spline(x = aggregated_pvalues, y = unlist(aggregated_pvalues$pvalues))
+    minima <- spline$fit$knot[which(spline$fit$coef == min(spline$fit$coef))]
+    # Did we get a non-random fit? Mann-Kendall Rank Test of randomness..
+    p_nonrandomfit=cor.test(spline$fit$coef,order(spline$fit$coef), method="kendall")$pvalue
+    # Minima should not be in either end of the spline. That would likely mean that
+    # we have not sampled the range in which the true minima lies. Hence, expand range and re-iterate..
+    valid_minima <- (split$fit$knot[1] != minima) & (split$fit$knot[length(split$fit$knot)] != minima)
+
+    if (p_nonrandomfit < 0.01 && valid_minima)
+      break
+
+    # We need to check that
+    stepsize <- stepsize * 2
+    max_exponent <- max_exponent * 2
+  }
+
+  # Adjust the weights
+  snps$WEIGHT <- snps$WEIGHT * snps$INFO^minima
+
+  snps
 }
