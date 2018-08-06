@@ -93,7 +93,7 @@ scaleDosages <- function(unscaled) {
 
 #' Sample dosages from genotypes
 #'
-#' Creates random dosages from genotypes using fast binary search for r-squared.
+  #' Creates random dosages from genotypes using fast binary search for r-squared.
 #' It will result in  approximately correct r-squared.
 #'
 #' @param genotypes a vector of numeric genotypes (0,1,2)
@@ -117,10 +117,8 @@ sampleDosages <- function(genotypes,info,epsilon=0.01) {
       dosages <- scaleDosages(jitter(genotypes,amount=jitterAmount))
     }
     dosages
-    #list(genotypes = genotypes, dosages = dosages,r.squared = rsq)
   } else {
     dosages
-    #list(genotypes = genotypes, dosages = genotypes,r.squared = 1)
   }
 }
 
@@ -148,7 +146,6 @@ samplePopulationDosages <- function(snps, n, phenotypes = rnorm(n)) {
   class(dat) <- "population"
   dat
 }
-
 
 #' GRS power calculation
 #'
@@ -299,10 +296,9 @@ autoAdjustWeights <- function(snps, n, popsize=n^2) {
   minima <- NA
   repeat {
     exponents=seq(stepsize,max_exponent,stepsize)
-    print(exponents)
     e_vs_p <- rbind(e_vs_p, testAdjustmentExponents(snps, n, popsize, exponents))
     # Try fit a spline and find minima
-    spline <- smooth.spline(x = aggregated_pvalues, y = unlist(aggregated_pvalues$pvalues))
+    spline <- smooth.spline(x = e_vs_p$exponents, y = e_vs_p$pvalues)
     minima <- spline$fit$knot[which(spline$fit$coef == min(spline$fit$coef))]
     # Did we get a non-random fit? Mann-Kendall Rank Test of randomness..
     p_nonrandomfit=cor.test(spline$fit$coef,order(spline$fit$coef), method="kendall")$pvalue
