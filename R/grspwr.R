@@ -178,7 +178,7 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=max(n)^2) {
 
   cat("Subsampling population calculate power..\n")
 
-  lapply(n,function(n_i) {
+  powers <- lapply(n,function(n_i) {
     pvalues <- rep(NA,max.iter)
     betas <- rep(NA,max.iter)
     for(i in 1:max.iter) {
@@ -203,6 +203,12 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=max(n)^2) {
     class(pwr) <- "grspwr"
     pwr
   })
+
+  if (length(powers)==1) {
+      powers[[1]]
+  } else {
+    powers
+  }
 }
 
 #' Generates simulated pvalues for ranges of the exponent e in the equation:
