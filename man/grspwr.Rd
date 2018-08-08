@@ -4,7 +4,7 @@
 \alias{grspwr}
 \title{GRS power calculation}
 \usage{
-grspwr(snps, n, alpha = 0.05, max.iter = 1000, popsize = n * 2)
+grspwr(snps, n, alpha = 0.05, max.iter = 1000, popsize = max(n)^2)
 }
 \arguments{
 \item{n}{The number of individuals to include in the GRS}
@@ -16,7 +16,7 @@ grspwr(snps, n, alpha = 0.05, max.iter = 1000, popsize = n * 2)
 \item{snps:}{A dataframe with the following columns:
 \itemize{
 \item SNP: Unique name of SNP
-\item Weight: a weight associated with the _minor_ allele of SNP. Weights should be normalized   relative to a standard normal distribution (mean 0, variance 1).
+\item WEIGHT: a weight associated with the _minor_ allele of SNP. Weights should be normalized   relative to a standard normal distribution (mean 0, variance 1).
 \item EAF: Effect allele frequency
 \item Estimated R-squared correlation of imputation with actual genotype.For imputed genotypes this will be [0-1] and for directly genotyped SNPs it should be 1.
 }}
@@ -28,7 +28,7 @@ Note: It assumes that the weights used are accurate estimates of SNP effects.
 }
 \examples{
 exampleGRS <- data.frame(SNP = c("rs1", "rs2", "rs3"),
-                              Weight = c(0.01, 0.01, 0.2),
+                              WEIGHT = c(0.01, 0.01, 0.2),
                               EAF = c(0.42, 0.42, 0.42),
                               INFO= c(0.9, 0.9, 0.2))
 grspwr(exampleGRS,n=400, alpha = 0.05)

@@ -2,20 +2,10 @@
 % Please edit documentation in R/grspwr.R
 \name{sampleGenotypes}
 \alias{sampleGenotypes}
-\title{Generate genotypes with a given effect on phetypes}
+\title{Generate a genotype vector of length n with a given minor allele frequency (maf)}
 \usage{
-sampleGenotypes(phenotypes, beta, n, maf)
-}
-\arguments{
-\item{phenotypes}{a vector of phenotypes (assumed to be normally distributed)}
-
-\item{beta}{desired effect size}
-
-\item{n}{sample size}
-
-\item{maf}{minor (effect) allele frequency}
+sampleGenotypes(n, maf)
 }
 \description{
-Make a vector of genotypes with a certain frequency and such that the
-per-allele effect one the given phenotypes is as specified.
+Generate a genotype vector of length n with a given minor allele frequency (maf)
 }

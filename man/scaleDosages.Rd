@@ -8,6 +8,12 @@ scaleDosages(unscaled)
 }
 \arguments{
 \item{unscaled}{The unscaled input}
+
+\item{unscaled}{The unscaled input}
+
+\item{unscaled}{The unscaled input}
+
+\item{unscaled}{The unscaled input}
 }
 \description{
 Scale a numeric vector to values between 0 and 2.
