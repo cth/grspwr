@@ -176,7 +176,7 @@ grspwr <- function(snps, n, alpha = 0.05, max.iter=1000, popsize=max(n)^2) {
   cat("Generating population phenotype and genotypes..\n")
   pop <- samplePopulationDosages(snps,popsize)
 
-  cat("Subsampling population calculate power..\n")
+  cat("Subsampling population to calculate power..\n")
 
   powers <- lapply(n,function(n_i) {
     pvalues <- rep(NA,max.iter)

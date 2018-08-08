@@ -18,21 +18,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// timesTwo
-NumericVector timesTwo(NumericVector x);
-RcppExport SEXP _grspwr_timesTwo(SEXP xSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(timesTwo(x));
-    return rcpp_result_gen;
-END_RCPP
-}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_grspwr_permute_genotypes_C", (DL_FUNC) &_grspwr_permute_genotypes_C, 3},
-    {"_grspwr_timesTwo", (DL_FUNC) &_grspwr_timesTwo, 1},
     {NULL, NULL, 0}
 };
 
