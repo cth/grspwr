@@ -20,7 +20,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_grspwr_permute_genotypes_C", (DL_FUNC) &_grspwr_permute_genotypes_C, 3},
+    {"permute_genotypes_C", (DL_FUNC) &_grspwr_permute_genotypes_C, 3},
     {NULL, NULL, 0}
 };
 
