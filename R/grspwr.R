@@ -77,7 +77,8 @@ sampleCorrelatedGenotypes <- function(phenotypes, beta, n, maf) {
 #' @param n sample size
 #' @param maf minor (effect) allele frequency
 sampleCorrelatedGenotypesC <- function(phenotypes,beta,n,maf) {
-  permute_genotypes_C(beta,sampleGenotypes(n,maf),phenotypes)
+  #permute_genotypes_C(beta,sampleGenotypes(n,maf),phenotypes)
+  .Call("_grspwr_permute_genotypes_C", beta,sampleGenotypes(n,maf),phenotypes)
 }
 
 #' Scale a numeric vector to values between 0 and 2.
