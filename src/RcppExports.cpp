@@ -19,11 +19,8 @@ BEGIN_RCPP
 END_RCPP
 }
 
-RcppExport SEXP permute_genotypes_C(SEXP, SEXP, SEXP, SEXP);
-
 static const R_CallMethodDef CallEntries[] = {
     {"_grspwr_permute_genotypes_C", (DL_FUNC) &_grspwr_permute_genotypes_C, 3},
-    {"permute_genotypes_C",         (DL_FUNC) &permute_genotypes_C,         4},
     {NULL, NULL, 0}
 };
 
